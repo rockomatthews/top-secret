@@ -9,8 +9,17 @@ dotenv.config();
 
 const app = express();
 
+// Check for Supabase environment variables
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.error('Supabase URL or Anon Key is missing. Please check your environment variables.');
+  process.exit(1);
+}
+
 // Supabase client initialization
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Middleware
 app.use(cors());
