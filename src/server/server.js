@@ -34,10 +34,13 @@ app.use(limiter);
 
 // Authentication middleware
 const checkAuth = async (req, res, next) => {
+  console.log('Checking authentication...');
   try {
     const cookie = req.headers.authorization;
+    console.log('Received cookie:', cookie ? 'Present' : 'Not present');
     const validCookie = await verifyAuth(cookie);
     req.authCookie = validCookie;
+    console.log('Authentication successful');
     next();
   } catch (authError) {
     console.error('Authentication failed:', authError.message);
@@ -58,8 +61,10 @@ app.get('/health', (req, res) => {
 });
 
 app.post('/api/login', async (req, res) => {
+  console.log('Login attempt...');
   try {
     const cookie = await login();
+    console.log('Login successful');
     res.status(200).json({ message: 'Login successful', cookie });
   } catch (loginError) {
     console.error('Login error:', loginError.message);
@@ -68,11 +73,15 @@ app.post('/api/login', async (req, res) => {
 });
 
 app.get('/api/official-races', checkAuth, async (req, res) => {
+  console.log('Fetching official races...');
   try {
     const { page = 1, pageSize = 10 } = req.query;
+    console.log(`Fetching races for page ${page} with pageSize ${pageSize}`);
     const { races, cookie } = await getOfficialRaces(page, pageSize, req.authCookie);
+    console.log(`Fetched ${races.length} races`);
     
     // Process and store races in Supabase
+    console.log('Storing races in Supabase...');
     const { data, error } = await supabase
       .from('official_races')
       .upsert(races.map(race => ({
@@ -82,17 +91,25 @@ app.get('/api/official-races', checkAuth, async (req, res) => {
         // Add other relevant fields
       })), { onConflict: 'series_name,track_name,start_time' });
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase upsert error:', error);
+      throw error;
+    }
 
     // Fetch processed races from Supabase
+    console.log('Fetching processed races from Supabase...');
     const { data: processedRaces, error: fetchError } = await supabase
       .from('official_races')
       .select('*')
       .order('start_time', { ascending: true })
       .range((page - 1) * pageSize, page * pageSize - 1);
 
-    if (fetchError) throw fetchError;
+    if (fetchError) {
+      console.error('Supabase fetch error:', fetchError);
+      throw fetchError;
+    }
 
+    console.log(`Sending ${processedRaces.length} processed races to client`);
     res.status(200).json({ races: processedRaces, cookie });
   } catch (racesError) {
     console.error('Fetch races error:', racesError.message);
@@ -102,7 +119,7 @@ app.get('/api/official-races', checkAuth, async (req, res) => {
 
 // Error handling
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('Unhandled error:', err.stack);
   res.status(500).json({ error: 'Something went wrong!' });
   next(err);
 });

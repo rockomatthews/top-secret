@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'; // eslint-disable-line no-unused-vars
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   List, 
   ListItem, 
@@ -22,10 +22,12 @@ const OfficialRaceList = () => {
     setLoading(true);
     setError(null);
     try {
+      console.log('Fetching races...');
       const currentPage = reset ? 1 : page;
       const response = await axios.get(`${API_URL}/api/official-races`, {
         params: { page: currentPage, pageSize: 10 }
       });
+      console.log('Received response:', response.data);
       
       if (reset) {
         setRaces(response.data.races);
@@ -36,7 +38,7 @@ const OfficialRaceList = () => {
       setPage(currentPage + 1);
     } catch (error) {
       console.error('Error fetching races:', error);
-      setError('Failed to fetch races. Please try again later.');
+      setError(`Failed to fetch races: ${error.message}`);
     } finally {
       setLoading(false);
     }
