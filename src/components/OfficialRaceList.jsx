@@ -17,7 +17,6 @@ const OfficialRaceList = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [page, setPage] = useState(1);
-  const [authCookie, setAuthCookie] = useState(localStorage.getItem('authCookie'));
 
   const fetchRaces = useCallback(async (reset = false) => {
     setLoading(true);
@@ -25,8 +24,7 @@ const OfficialRaceList = () => {
     try {
       const currentPage = reset ? 1 : page;
       const response = await axios.get(`${API_URL}/api/official-races`, {
-        params: { page: currentPage, pageSize: 10 },
-        headers: authCookie ? { Authorization: authCookie } : {}
+        params: { page: currentPage, pageSize: 10 }
       });
       
       if (reset) {
@@ -35,73 +33,28 @@ const OfficialRaceList = () => {
         setRaces(prevRaces => [...prevRaces, ...response.data.races]);
       }
       
-      if (response.data.cookie) {
-        setAuthCookie(response.data.cookie);
-        localStorage.setItem('authCookie', response.data.cookie);
-      }
-      
       setPage(currentPage + 1);
-      setLoading(false);
     } catch (error) {
       console.error('Error fetching races:', error);
-      if (error.response && error.response.status === 401) {
-        setError('Authentication failed. Please try logging in again.');
-        localStorage.removeItem('authCookie');
-        setAuthCookie(null);
-      } else {
-        setError('Failed to fetch races. Please try again later.');
-      }
+      setError('Failed to fetch races. Please try again later.');
+    } finally {
       setLoading(false);
     }
-  }, [authCookie, page]);
+  }, [page]);
 
   useEffect(() => {
-    if (authCookie) {
-      fetchRaces(true);
-    }
-  }, [authCookie, fetchRaces]);
+    fetchRaces(true);
+  }, [fetchRaces]);
 
-  // Function to handle loading more races
   const handleLoadMore = () => {
     fetchRaces();
   };
 
-  // Function to handle refreshing the race list
   const handleRefresh = () => {
     setPage(1);
     fetchRaces(true);
   };
 
-  // Function to handle user login
-  const handleLogin = async () => {
-    try {
-      const response = await axios.post(`${API_URL}/api/login`);
-      if (response.data.cookie) {
-        setAuthCookie(response.data.cookie);
-        localStorage.setItem('authCookie', response.data.cookie);
-        fetchRaces(true);
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-      setError('Login failed. Please try again.');
-    }
-  };
-
-  // Render login button if not authenticated
-  if (!authCookie) {
-    return (
-      <Box>
-        <Typography variant="h6" component="h2" gutterBottom>
-          Login Required
-        </Typography>
-        <Button variant="contained" color="primary" onClick={handleLogin}>
-          Login
-        </Button>
-      </Box>
-    );
-  }
-
-  // Render loading spinner while fetching data
   if (loading && races.length === 0) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
@@ -110,7 +63,6 @@ const OfficialRaceList = () => {
     );
   }
 
-  // Render error message if an error occurred
   if (error) {
     return (
       <Box>
@@ -125,7 +77,6 @@ const OfficialRaceList = () => {
     );
   }
 
-  // Render the list of races
   return (
     <Box>
       <Typography variant="h6" component="h2" gutterBottom>

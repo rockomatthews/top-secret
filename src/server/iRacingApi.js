@@ -18,7 +18,7 @@ const login = async () => {
     return authCookie;
   } catch (error) {
     console.error('Login failed:', error.message);
-    throw error;
+    throw new Error('Failed to authenticate with iRacing API');
   }
 };
 
@@ -40,7 +40,7 @@ const verifyAuth = async (cookie = authCookie) => {
       cookie = await login();
       return verifyAuth(cookie);
     }
-    throw error;
+    throw new Error('Failed to verify authentication with iRacing API');
   }
 };
 
@@ -54,7 +54,7 @@ const getOfficialRaces = async (page, pageSize, cookie) => {
     return { races: response.data, cookie };
   } catch (error) {
     console.error('Failed to fetch official races:', error.message);
-    throw error;
+    throw new Error('Failed to fetch official races from iRacing API');
   }
 };
 
