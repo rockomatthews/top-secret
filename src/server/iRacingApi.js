@@ -1,50 +1,59 @@
-/* eslint-disable no-undef */
 import axios from 'axios';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const { IRACING_USERNAME, IRACING_PASSWORD } = process.env;
 
 let authCookie = null;
 
 const login = async () => {
   try {
     const response = await axios.post('https://members-ng.iracing.com/auth', {
-      email: process.env.IRACING_USERNAME,
-      password: process.env.IRACING_PASSWORD
+      email: IRACING_USERNAME,
+      password: IRACING_PASSWORD
     });
     authCookie = response.headers['set-cookie'][0];
-    return true;
+    console.log('Login successful, auth cookie set');
+    return authCookie;
   } catch (error) {
-    console.error('Login failed:', error);
+    console.error('Login failed:', error.message);
     throw error;
   }
 };
 
-
-const verifyAuth = async () => {
-  if (!authCookie) {
-    throw new Error('Not authenticated');
+const verifyAuth = async (cookie = authCookie) => {
+  if (!cookie) {
+    console.log('No auth cookie, attempting to login');
+    cookie = await login();
   }
   try {
     await axios.get('https://members-ng.iracing.com/data/member/get', {
-      headers: { Cookie: authCookie }
+      headers: { Cookie: cookie }
     });
-    return true;
+    console.log('Auth verification successful');
+    return cookie;
   } catch (error) {
-    console.error('Auth verification failed:', error);
+    console.error('Auth verification failed:', error.message);
+    if (error.response && error.response.status === 401) {
+      console.log('Unauthorized, attempting to re-login');
+      cookie = await login();
+      return verifyAuth(cookie);
+    }
     throw error;
   }
 };
 
-const getOfficialRaces = async (page, pageSize) => {
-  if (!authCookie) {
-    throw new Error('Not authenticated');
-  }
+const getOfficialRaces = async (page, pageSize, cookie) => {
+  cookie = await verifyAuth(cookie);
   try {
     const response = await axios.get('https://members-ng.iracing.com/data/season/race_guide', {
-      headers: { Cookie: authCookie },
+      headers: { Cookie: cookie },
       params: { page, pageSize }
     });
-    return response.data;
+    return { races: response.data, cookie };
   } catch (error) {
-    console.error('Failed to fetch official races:', error);
+    console.error('Failed to fetch official races:', error.message);
     throw error;
   }
 };

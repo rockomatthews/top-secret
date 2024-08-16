@@ -2,27 +2,31 @@ import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { login, getOfficialRaces, verifyAuth } from './iRacingApi.js';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const app = express();
-
 // Middleware
 app.use(cors());
 app.use(express.json());
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 100
 });
 app.use(limiter);
 
 // Authentication middleware
 const checkAuth = async (req, res, next) => {
   try {
-    await verifyAuth();
+    const cookie = req.headers.authorization;
+    const validCookie = await verifyAuth(cookie);
+    req.authCookie = validCookie;
     next();
   } catch (authError) {
-    console.error('Authentication failed:', authError);
+    console.error('Authentication failed:', authError.message);
     res.status(401).json({ error: 'Authentication failed' });
   }
 };
@@ -31,17 +35,8 @@ const checkAuth = async (req, res, next) => {
 login().then(() => {
   console.log('Initial login successful');
 }).catch((error) => {
-  console.error('Initial login failed:', error);
+  console.error('Initial login failed:', error.message);
 });
-
-// Re-authenticate every 20 minutes
-setInterval(() => {
-  login().then(() => {
-    console.log('Re-authentication successful');
-  }).catch((error) => {
-    console.error('Re-authentication failed:', error);
-  });
-}, 20 * 60 * 1000); // 20 minutes in milliseconds
 
 // Routes
 app.get('/health', (req, res) => {
@@ -50,22 +45,21 @@ app.get('/health', (req, res) => {
 
 app.post('/api/login', async (req, res) => {
   try {
-    const { username, password } = req.body;
-    await login(username, password);
-    res.status(200).json({ message: 'Login successful' });
+    const cookie = await login();
+    res.status(200).json({ message: 'Login successful', cookie });
   } catch (loginError) {
-    console.error('Login error:', loginError);
+    console.error('Login error:', loginError.message);
     res.status(401).json({ error: 'Login failed' });
   }
 });
 
 app.get('/api/official-races', checkAuth, async (req, res) => {
   try {
-    const { page = 1, pageSize = 20 } = req.query;
-    const races = await getOfficialRaces(page, pageSize);
-    res.status(200).json(races);
+    const { page = 1, pageSize = 10 } = req.query;
+    const { races, cookie } = await getOfficialRaces(page, pageSize, req.authCookie);
+    res.status(200).json({ races, cookie });
   } catch (racesError) {
-    console.error('Fetch races error:', racesError);
+    console.error('Fetch races error:', racesError.message);
     res.status(500).json({ error: 'Failed to fetch official races' });
   }
 });
@@ -77,7 +71,6 @@ app.use((err, req, res, next) => {
   next(err);
 });
 
-// eslint-disable-next-line no-undef
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
