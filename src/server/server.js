@@ -18,14 +18,30 @@ app.use(limiter);
 
 // Authentication middleware
 const checkAuth = async (req, res, next) => {
-    try {
-      await verifyAuth();
-      next();
-    } catch (authError) {
-      console.error('Authentication failed:', authError);
-      res.status(401).json({ error: 'Authentication failed' });
-    }
-  };
+  try {
+    await verifyAuth();
+    next();
+  } catch (authError) {
+    console.error('Authentication failed:', authError);
+    res.status(401).json({ error: 'Authentication failed' });
+  }
+};
+
+// Initial login attempt
+login().then(() => {
+  console.log('Initial login successful');
+}).catch((error) => {
+  console.error('Initial login failed:', error);
+});
+
+// Re-authenticate every 20 minutes
+setInterval(() => {
+  login().then(() => {
+    console.log('Re-authentication successful');
+  }).catch((error) => {
+    console.error('Re-authentication failed:', error);
+  });
+}, 20 * 60 * 1000); // 20 minutes in milliseconds
 
 // Routes
 app.get('/health', (req, res) => {

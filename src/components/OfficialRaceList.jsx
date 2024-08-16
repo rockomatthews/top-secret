@@ -5,7 +5,8 @@ import {
   ListItemText, 
   Typography, 
   CircularProgress, 
-  Box 
+  Box,
+  Button
 } from '@mui/material';
 import axios from 'axios';
 
@@ -14,21 +15,31 @@ const OfficialRaceList = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const fetchRaces = async () => {
-      try {
-        const response = await axios.get('https://top-secret-78e9.onrender.com/api/official-races');
-        setRaces(response.data);
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching races:', error);
+  const fetchRaces = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await axios.get('https://top-secret-78e9.onrender.com/api/official-races');
+      setRaces(response.data);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching races:', error);
+      if (error.response && error.response.status === 401) {
+        setError('Authentication failed. Please try again later.');
+      } else {
         setError('Failed to fetch races. Please try again later.');
-        setLoading(false);
       }
-    };
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchRaces();
   }, []);
+
+  const handleRetry = () => {
+    fetchRaces();
+  };
 
   if (loading) {
     return (
@@ -45,6 +56,9 @@ const OfficialRaceList = () => {
           Error
         </Typography>
         <Typography color="error">{error}</Typography>
+        <Button variant="contained" color="primary" onClick={handleRetry} sx={{ mt: 2 }}>
+          Retry
+        </Button>
       </Box>
     );
   }
@@ -78,6 +92,9 @@ const OfficialRaceList = () => {
           ))}
         </List>
       )}
+      <Button variant="contained" color="primary" onClick={handleRetry} sx={{ mt: 2 }}>
+        Refresh Races
+      </Button>
     </Box>
   );
 };
