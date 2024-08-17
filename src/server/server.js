@@ -49,7 +49,7 @@ const checkAuth = async (req, res, next) => {
 };
 
 // Initial login attempt
-login().then(() => {
+login().then((cookie) => {
   console.log('Initial login successful');
 }).catch((error) => {
   console.error('Initial login failed:', error.message);
