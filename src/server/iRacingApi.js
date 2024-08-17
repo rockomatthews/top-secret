@@ -1,4 +1,5 @@
 import axios from 'axios';
+import crypto from 'crypto';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -6,16 +7,21 @@ dotenv.config();
 const { IRACING_USERNAME, IRACING_PASSWORD } = process.env;
 
 let authCookie = null;
-let lastAuthCheck = 0;
-const AUTH_CHECK_INTERVAL = 15 * 60 * 1000; // 15 minutes
 
 const login = async () => {
   try {
     console.log('Attempting to log in...');
+    const email = IRACING_USERNAME.toLowerCase();
+    const password = IRACING_PASSWORD;
+    const hashPassword = crypto.createHash('sha256')
+      .update(password + email)
+      .digest('base64');
+
     const response = await axios.post('https://members-ng.iracing.com/auth', {
       email: IRACING_USERNAME,
-      password: IRACING_PASSWORD
+      password: hashPassword
     });
+    
     authCookie = response.headers['set-cookie'][0];
     console.log('Login successful, auth cookie set');
     return authCookie;
@@ -25,46 +31,39 @@ const login = async () => {
   }
 };
 
-const refreshAuth = async () => {
-  try {
-    console.log('Refreshing authentication...');
-    await axios.get('https://members-ng.iracing.com/data/member/get', {
-      headers: { Cookie: authCookie }
-    });
-    console.log('Authentication refreshed successfully');
-    lastAuthCheck = Date.now();
-  } catch (error) {
-    console.error('Auth refresh failed:', error.message);
-    authCookie = null; // Clear the cookie if refresh fails
-    throw new Error('Failed to refresh authentication');
-  }
-};
-
-const ensureAuth = async () => {
+const getOfficialRaces = async (page = 1, pageSize = 10) => {
   if (!authCookie) {
-    return await login();
+    await login();
   }
   
-  const now = Date.now();
-  if (now - lastAuthCheck > AUTH_CHECK_INTERVAL) {
-    await refreshAuth();
-  }
-  
-  return authCookie;
-};
-
-const getOfficialRaces = async (page, pageSize) => {
-  await ensureAuth();
   try {
-    const response = await axios.get('https://members-ng.iracing.com/data/season/race_guide', {
+    const response = await axios.get('https://members-ng.iracing.com/data/series/seasons', {
       headers: { Cookie: authCookie },
-      params: { page, pageSize }
+      params: { include_series: true }
     });
-    return { races: response.data };
+    
+    if (response.data && response.data.link) {
+      const dataResponse = await axios.get(response.data.link);
+      const allSeries = dataResponse.data.series;
+      const officialSeries = allSeries.filter(series => series.official);
+      
+      // Paginate the results
+      const start = (page - 1) * pageSize;
+      const end = start + pageSize;
+      const paginatedSeries = officialSeries.slice(start, end);
+      
+      return { races: paginatedSeries, totalCount: officialSeries.length };
+    } else {
+      throw new Error('Unexpected response format from iRacing API');
+    }
   } catch (error) {
     console.error('Failed to fetch official races:', error.message);
+    if (error.response && error.response.status === 401) {
+      authCookie = null;
+      return getOfficialRaces(page, pageSize); // Retry once after re-login
+    }
     throw new Error('Failed to fetch official races from iRacing API');
   }
 };
 
-export { login, ensureAuth, getOfficialRaces };
+export { login, getOfficialRaces };

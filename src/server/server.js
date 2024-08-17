@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
-import { login, ensureAuth, getOfficialRaces } from './iRacingApi.js';
+import { getOfficialRaces } from './iRacingApi.js';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 
@@ -32,13 +32,6 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// Initial login attempt
-login().then(() => {
-  console.log('Initial login successful');
-}).catch((error) => {
-  console.error('Initial login failed:', error.message);
-});
-
 // Routes
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK' });
@@ -47,10 +40,9 @@ app.get('/health', (req, res) => {
 app.get('/api/official-races', async (req, res) => {
   console.log('Fetching official races...');
   try {
-    await ensureAuth();
     const { page = 1, pageSize = 10 } = req.query;
     console.log(`Fetching races for page ${page} with pageSize ${pageSize}`);
-    const { races } = await getOfficialRaces(page, pageSize);
+    const { races, totalCount } = await getOfficialRaces(Number(page), Number(pageSize));
     console.log(`Fetched ${races.length} races`);
     
     // Process and store races in Supabase
@@ -58,11 +50,11 @@ app.get('/api/official-races', async (req, res) => {
     const { data, error } = await supabase
       .from('official_races')
       .upsert(races.map(race => ({
+        series_id: race.series_id,
         series_name: race.series_name,
-        track_name: race.track_name,
-        start_time: race.start_time,
+        season_id: race.season_id,
         // Add other relevant fields
-      })), { onConflict: 'series_name,track_name,start_time' });
+      })), { onConflict: 'series_id' });
 
     if (error) {
       console.error('Supabase upsert error:', error);
@@ -74,7 +66,7 @@ app.get('/api/official-races', async (req, res) => {
     const { data: processedRaces, error: fetchError } = await supabase
       .from('official_races')
       .select('*')
-      .order('start_time', { ascending: true })
+      .order('series_name', { ascending: true })
       .range((page - 1) * pageSize, page * pageSize - 1);
 
     if (fetchError) {
@@ -83,7 +75,7 @@ app.get('/api/official-races', async (req, res) => {
     }
 
     console.log(`Sending ${processedRaces.length} processed races to client`);
-    res.status(200).json({ races: processedRaces });
+    res.status(200).json({ races: processedRaces, totalCount });
   } catch (racesError) {
     console.error('Fetch races error:', racesError.message);
     res.status(500).json({ error: 'Failed to fetch official races' });
