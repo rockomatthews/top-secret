@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
-import { login, getOfficialRaces, verifyAuth } from './iRacingApi.js';
+import { login, ensureAuth, getOfficialRaces } from './iRacingApi.js';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 
@@ -32,24 +32,8 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// Authentication middleware
-const checkAuth = async (req, res, next) => {
-  console.log('Checking authentication...');
-  try {
-    const cookie = req.headers.authorization;
-    console.log('Received cookie:', cookie ? 'Present' : 'Not present');
-    const validCookie = await verifyAuth(cookie);
-    req.authCookie = validCookie;
-    console.log('Authentication successful');
-    next();
-  } catch (authError) {
-    console.error('Authentication failed:', authError.message);
-    res.status(401).json({ error: 'Authentication failed' });
-  }
-};
-
 // Initial login attempt
-login().then((cookie) => {
+login().then(() => {
   console.log('Initial login successful');
 }).catch((error) => {
   console.error('Initial login failed:', error.message);
@@ -60,24 +44,13 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK' });
 });
 
-app.post('/api/login', async (req, res) => {
-  console.log('Login attempt...');
-  try {
-    const cookie = await login();
-    console.log('Login successful');
-    res.status(200).json({ message: 'Login successful', cookie });
-  } catch (loginError) {
-    console.error('Login error:', loginError.message);
-    res.status(401).json({ error: 'Login failed' });
-  }
-});
-
-app.get('/api/official-races', checkAuth, async (req, res) => {
+app.get('/api/official-races', async (req, res) => {
   console.log('Fetching official races...');
   try {
+    await ensureAuth();
     const { page = 1, pageSize = 10 } = req.query;
     console.log(`Fetching races for page ${page} with pageSize ${pageSize}`);
-    const { races, cookie } = await getOfficialRaces(page, pageSize, req.authCookie);
+    const { races } = await getOfficialRaces(page, pageSize);
     console.log(`Fetched ${races.length} races`);
     
     // Process and store races in Supabase
@@ -110,7 +83,7 @@ app.get('/api/official-races', checkAuth, async (req, res) => {
     }
 
     console.log(`Sending ${processedRaces.length} processed races to client`);
-    res.status(200).json({ races: processedRaces, cookie });
+    res.status(200).json({ races: processedRaces });
   } catch (racesError) {
     console.error('Fetch races error:', racesError.message);
     res.status(500).json({ error: 'Failed to fetch official races' });

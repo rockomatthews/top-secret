@@ -6,18 +6,12 @@ dotenv.config();
 const { IRACING_USERNAME, IRACING_PASSWORD } = process.env;
 
 let authCookie = null;
-let lastLoginAttempt = 0;
-const LOGIN_COOLDOWN = 60000; // 1 minute cooldown between login attempts
+let lastAuthCheck = 0;
+const AUTH_CHECK_INTERVAL = 15 * 60 * 1000; // 15 minutes
 
 const login = async () => {
-  const now = Date.now();
-  if (now - lastLoginAttempt < LOGIN_COOLDOWN) {
-    console.log('Login attempt too soon, waiting...');
-    await new Promise(resolve => setTimeout(resolve, LOGIN_COOLDOWN - (now - lastLoginAttempt)));
-  }
-  
-  lastLoginAttempt = Date.now();
   try {
+    console.log('Attempting to log in...');
     const response = await axios.post('https://members-ng.iracing.com/auth', {
       email: IRACING_USERNAME,
       password: IRACING_PASSWORD
@@ -31,43 +25,46 @@ const login = async () => {
   }
 };
 
-const verifyAuth = async (cookie) => {
-  if (!cookie && !authCookie) {
-    console.log('No auth cookie, attempting to login');
-    return await login();
-  }
-  
-  const cookieToUse = cookie || authCookie;
-  
+const refreshAuth = async () => {
   try {
+    console.log('Refreshing authentication...');
     await axios.get('https://members-ng.iracing.com/data/member/get', {
-      headers: { Cookie: cookieToUse }
+      headers: { Cookie: authCookie }
     });
-    console.log('Auth verification successful');
-    authCookie = cookieToUse;  // Update the stored cookie if verification was successful
-    return cookieToUse;
+    console.log('Authentication refreshed successfully');
+    lastAuthCheck = Date.now();
   } catch (error) {
-    console.error('Auth verification failed:', error.message);
-    if (error.response && error.response.status === 401) {
-      console.log('Unauthorized, attempting to re-login');
-      return await login();
-    }
-    throw new Error('Failed to verify authentication with iRacing API');
+    console.error('Auth refresh failed:', error.message);
+    authCookie = null; // Clear the cookie if refresh fails
+    throw new Error('Failed to refresh authentication');
   }
 };
 
-const getOfficialRaces = async (page, pageSize, cookie) => {
-  const verifiedCookie = await verifyAuth(cookie);
+const ensureAuth = async () => {
+  if (!authCookie) {
+    return await login();
+  }
+  
+  const now = Date.now();
+  if (now - lastAuthCheck > AUTH_CHECK_INTERVAL) {
+    await refreshAuth();
+  }
+  
+  return authCookie;
+};
+
+const getOfficialRaces = async (page, pageSize) => {
+  await ensureAuth();
   try {
     const response = await axios.get('https://members-ng.iracing.com/data/season/race_guide', {
-      headers: { Cookie: verifiedCookie },
+      headers: { Cookie: authCookie },
       params: { page, pageSize }
     });
-    return { races: response.data, cookie: verifiedCookie };
+    return { races: response.data };
   } catch (error) {
     console.error('Failed to fetch official races:', error.message);
     throw new Error('Failed to fetch official races from iRacing API');
   }
 };
 
-export { login, verifyAuth, getOfficialRaces };
+export { login, ensureAuth, getOfficialRaces };
