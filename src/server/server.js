@@ -45,6 +45,11 @@ app.get('/api/official-races', async (req, res) => {
     const { races, totalCount } = await getOfficialRaces(Number(page), Number(pageSize));
     console.log(`Fetched ${races.length} races`);
     
+    if (races.length === 0) {
+      console.log('No races fetched, returning empty array');
+      return res.status(200).json({ races: [], totalCount: 0 });
+    }
+    
     // Process and store races in Supabase
     console.log('Storing races in Supabase...');
     const { data, error } = await supabase
@@ -78,14 +83,14 @@ app.get('/api/official-races', async (req, res) => {
     res.status(200).json({ races: processedRaces, totalCount });
   } catch (racesError) {
     console.error('Fetch races error:', racesError.message);
-    res.status(500).json({ error: 'Failed to fetch official races' });
+    res.status(500).json({ error: 'Failed to fetch official races', details: racesError.message });
   }
 });
 
 // Error handling
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err.stack);
-  res.status(500).json({ error: 'Something went wrong!' });
+  res.status(500).json({ error: 'Something went wrong!', details: err.message });
   next(err);
 });
 

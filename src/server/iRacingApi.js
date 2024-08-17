@@ -27,6 +27,10 @@ const login = async () => {
     return authCookie;
   } catch (error) {
     console.error('Login failed:', error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+    }
     throw new Error('Failed to authenticate with iRacing API');
   }
 };
@@ -37,29 +41,44 @@ const getOfficialRaces = async (page = 1, pageSize = 10) => {
   }
   
   try {
+    console.log('Fetching series seasons...');
     const response = await axios.get('https://members-ng.iracing.com/data/series/seasons', {
       headers: { Cookie: authCookie },
       params: { include_series: true }
     });
     
+    console.log('Response received:', response.status);
+    console.log('Response data:', JSON.stringify(response.data).substring(0, 200) + '...');
+
     if (response.data && response.data.link) {
+      console.log('Fetching data from link:', response.data.link);
       const dataResponse = await axios.get(response.data.link);
-      const allSeries = dataResponse.data.series;
+      console.log('Data response received:', dataResponse.status);
+      console.log('Data sample:', JSON.stringify(dataResponse.data).substring(0, 200) + '...');
+
+      const allSeries = dataResponse.data.series || [];
       const officialSeries = allSeries.filter(series => series.official);
       
-      // Paginate the results
       const start = (page - 1) * pageSize;
       const end = start + pageSize;
       const paginatedSeries = officialSeries.slice(start, end);
       
+      console.log(`Returning ${paginatedSeries.length} races out of ${officialSeries.length} total`);
       return { races: paginatedSeries, totalCount: officialSeries.length };
     } else {
+      console.error('Unexpected response format:', response.data);
       throw new Error('Unexpected response format from iRacing API');
     }
   } catch (error) {
     console.error('Failed to fetch official races:', error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+    }
     if (error.response && error.response.status === 401) {
+      console.log('Unauthorized, attempting to re-login...');
       authCookie = null;
+      await login();
       return getOfficialRaces(page, pageSize); // Retry once after re-login
     }
     throw new Error('Failed to fetch official races from iRacing API');
