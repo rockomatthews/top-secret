@@ -20,6 +20,9 @@ const login = async () => {
     const response = await axios.post('https://members-ng.iracing.com/auth', {
       email: IRACING_USERNAME,
       password: hashPassword
+    }, {
+      maxRedirects: 0,
+      validateStatus: status => status >= 200 && status < 303
     });
     
     authCookie = response.headers['set-cookie'][0];
@@ -27,10 +30,6 @@ const login = async () => {
     return authCookie;
   } catch (error) {
     console.error('Login failed:', error.message);
-    if (error.response) {
-      console.error('Response status:', error.response.status);
-      console.error('Response data:', error.response.data);
-    }
     throw new Error('Failed to authenticate with iRacing API');
   }
 };
@@ -48,13 +47,11 @@ const getOfficialRaces = async (page = 1, pageSize = 10) => {
     });
     
     console.log('Response received:', response.status);
-    console.log('Response data:', JSON.stringify(response.data).substring(0, 200) + '...');
-
+    
     if (response.data && response.data.link) {
       console.log('Fetching data from link:', response.data.link);
       const dataResponse = await axios.get(response.data.link);
       console.log('Data response received:', dataResponse.status);
-      console.log('Data sample:', JSON.stringify(dataResponse.data).substring(0, 200) + '...');
 
       const allSeries = dataResponse.data.series || [];
       const officialSeries = allSeries.filter(series => series.official);
@@ -74,12 +71,6 @@ const getOfficialRaces = async (page = 1, pageSize = 10) => {
     if (error.response) {
       console.error('Response status:', error.response.status);
       console.error('Response data:', error.response.data);
-    }
-    if (error.response && error.response.status === 401) {
-      console.log('Unauthorized, attempting to re-login...');
-      authCookie = null;
-      await login();
-      return getOfficialRaces(page, pageSize); // Retry once after re-login
     }
     throw new Error('Failed to fetch official races from iRacing API');
   }
